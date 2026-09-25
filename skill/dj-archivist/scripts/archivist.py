@@ -1117,9 +1117,17 @@ def canary(st):
         n = 0
     st["empty_streak"] = 0
     if n == 0:
+        st["empty_canaries"] = st.get("empty_canaries", 0) + 1
+        if st["empty_canaries"] >= 3:                  # ~45 min of total silence: a fault, not throttling
+            st["empty_canaries"] = 0
+            log("canary search empty 3 times in a row: restarting slskd")
+            ensure_slskd(force=True)
+            st["paused_until"] = time.time() + 300
+            return True
         st["paused_until"] = time.time() + CANARY_PAUSE
         log(f"canary search empty: Soulseek is throttling, searches paused for {CANARY_PAUSE // 60} min")
         return True
+    st["empty_canaries"] = 0
     log(f"canary search: {n} users, the empty results were real")
     return False
 
@@ -1197,13 +1205,29 @@ def running_pid():
         return None
 
 
-def ensure_slskd():
-    if subprocess.run(["pgrep", "-f", str(C.slskd_binary)], capture_output=True).returncode != 0:
+def ensure_slskd(force=False):
+    """Start slskd when its process is gone. force=True: the process is alive but useless (stuck in a half-open
+    connection, or hours of empty searches): kill and restart it. In live use slskd sat in "Disconnecting" for six
+    hours while its process stayed alive, so nothing restarted it."""
+    pattern = f"{C.slskd_binary} --config"             # the process itself, not commands that mention its log file
+    alive = subprocess.run(["pgrep", "-f", pattern], capture_output=True).returncode == 0
+    if alive and not force:
+        return
+    if alive:
+        log("slskd is not responding or not useful, restarting it")
+        subprocess.run(["pkill", "-f", pattern], capture_output=True)
+        for _ in range(30):
+            time.sleep(1)
+            if subprocess.run(["pgrep", "-f", pattern], capture_output=True).returncode != 0:
+                break
+        else:
+            subprocess.run(["pkill", "-9", "-f", pattern], capture_output=True)
+    else:
         log("slskd is not running, starting it")
-        cmd = [sys.executable, str(HERE / "slskd_setup.py"), "--start"]
-        if C.path:
-            cmd += ["--config", str(C.path)]
-        subprocess.run(cmd, capture_output=True, timeout=180)
+    cmd = [sys.executable, str(HERE / "slskd_setup.py"), "--start"]
+    if C.path:
+        cmd += ["--config", str(C.path)]
+    subprocess.run(cmd, capture_output=True, timeout=180)
 
 
 def run_loop(limit=None):
@@ -1226,9 +1250,9 @@ def run_loop(limit=None):
         try:
             if not slskd_ready():
                 down += 1
-                if down in (1, 5, 20):
-                    ensure_slskd()
-                time.sleep(60 if down < 5 else 300)
+                if down in (1, 5, 20) or down % 12 == 0:
+                    ensure_slskd(force=down >= 10)             # not logged in for ~10 min: restart even if alive
+                time.sleep(60)
                 continue
             down = 0
             now = time.time()

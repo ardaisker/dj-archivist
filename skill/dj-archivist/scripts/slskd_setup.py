@@ -144,7 +144,7 @@ def start(cfg):
 
 def stop_running(cfg):
     """A running slskd would keep its old config: stop it and wait until it no longer answers."""
-    subprocess.run(["pkill", "-f", str(cfg.slskd_binary)], capture_output=True)
+    subprocess.run(["pkill", "-f", f"{cfg.slskd_binary} --config"], capture_output=True)
     for _ in range(20):
         if "error" in status(cfg):
             return

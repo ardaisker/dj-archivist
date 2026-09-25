@@ -175,6 +175,9 @@ The assistant prepares and runs everything it safely can. These steps are yours:
   Broad queries return thousands of files at once. The loop narrows queries without an
   artist word and restarts slskd if it dies. If it keeps happening, start slskd with a
   higher open-files limit (`ulimit -n 10240`).
+- **slskd stays up but is useless** (stuck "Disconnecting", or every search empty for
+  hours). The loop restarts it when it has not been logged in for about 10 minutes, or after
+  three empty canary searches in a row (about 45 minutes of total silence).
 - **A peer answers "Banned" or "Too many megabytes".** That is the peer's rule, usually
   aimed at users who share nothing. The loop never retries a ban, skips a quota for 24
   hours and moves on to the next valid file.

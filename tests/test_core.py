@@ -496,6 +496,26 @@ def test_rekordbox_export():
 
 
 # ---------------------------------------------------------------- runner
+
+def test_title_parsing_regressions():
+    """Live bugs: a version suffix after " - " was read as "Original Artist - Song", titles made only of noise
+    words or numbers came out empty, and an empty core matched any track by the artist."""
+    R = lambda a, t: {"id": "x", "artist": a, "title": t, "playlists": "", "length": "", "folder": ""}
+    cases = [
+        (R("Chico Rose (NL)", "Pom - Original Mix"), "Chico Rose (NL) - Pom (Original Mix).mp3", True),
+        (R("Chico Rose (NL)", "Pom - Original Mix"), "TomiXKesh - Funky Ass Beat (Chico Rose (NL) Remix).mp3", False),
+        (R("AYYBO, Blazey", "Dirty (Original Mix)"), "AYYBO, Blazey - Dirty (Original Mix).mp3", True),
+        (R("AYYBO, Blazey", "Dirty (Original Mix)"), "AYYBO - Obsession (Original Mix).mp3", False),
+        (R("Riordan & Danny P", "909 (Extended Mix)"), "Riordan, Danny P - 909 (Extended Mix).mp3", True),
+        (R("Riordan & Danny P", "909 (Extended Mix)"), "Riordan - As The Beat Goes Onnn (Extended Mix).mp3", False),
+        (R("Sidepiece Ft. 95 South", "Can I Ride (Extended Mix) - 11A - 8"), "Sidepiece - Can I Ride (Extended Mix).mp3", True),
+        (R("AYYBO", "Kendrick Lamar - Money Trees"), "Kendrick Lamar - Money Trees (AYYBO Extended Edit) v2.flac", True),
+    ]
+    for row, name, expected in cases:
+        assert A.matches(row, name) is expected, (row["title"], name)
+    assert A.split_row(R("Chico Rose (NL)", "Pom - Original Mix"))[1] == ["pom"]
+
+
 def main():
     tests = [(name, fn) for name, fn in list(globals().items()) if name.startswith("test_") and callable(fn)]
     failed = 0

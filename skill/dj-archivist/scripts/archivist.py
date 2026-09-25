@@ -474,16 +474,34 @@ def words(t):
     return [w for w in norm(t).split() if len(w) > 1 and w not in NOISE_WORDS and not re.fullmatch(r"\d+[ab]?", w)]
 
 
+BRACKETS_RE = re.compile(r"[\(\[].*?[\)\]]")
+ARTIST_SPLIT = re.compile(r",|&|\s+x\s+|\s+(?:feat|ft|featuring|vs)\.?\s+", re.I)
+
+
+def core_words(t):
+    """Song title words. If filtering removes everything ("Dirty", "909"), fall back to the raw words, dropping only
+    key tags (10A) and single letters. Live use: "Dirty (Original Mix)" and "909 (Extended Mix)" came out empty."""
+    w = words(t)
+    return w or [x for x in norm(t).split() if len(x) > 1 and not re.fullmatch(r"\d{1,2}[ab]", x)]
+
+
 def split_row(row):
     """(artist word groups, core title words, bracket words: remixer and such). A title written as
-    "Original Artist - Song" adds the original artist to the artists and keeps only the song as the core."""
+    "Original Artist - Song" adds the original artist to the artists and keeps only the song as the core. When the
+    part after " - " is only a version suffix or key/BPM ("Pom - Original Mix", "Can I Ride (Extended Mix) - 11A"),
+    the title is not split: in live use "Pom" was read that way, its core came out empty and another track by the
+    same artist was downloaded."""
     title = row["title"]
-    artists = [words(a) for a in re.split(r",|&| x | feat\.? ", row["artist"])]
+    artists = [words(a) for a in ARTIST_SPLIT.split(row["artist"])]
     if " - " in title:
-        before, title = title.split(" - ", 1)
-        artists.append(words(before))
+        before, after = title.split(" - ", 1)
+        if words(BRACKETS_RE.sub(" ", after)):
+            artists.append(words(before))
+            title = after
+        else:
+            title = f"{before} ({after})"
     brackets = words(" ".join(re.findall(r"[\(\[](.*?)[\)\]]", title)))
-    core = words(re.sub(r"[\(\[].*?[\)\]]", " ", title))
+    core = core_words(BRACKETS_RE.sub(" ", title))
     return [a for a in artists if a], core, brackets
 
 
@@ -572,6 +590,8 @@ def matches(row, path):
     """Strict identity: every core title word and remixer word in the FILE NAME; every word of at least one
     artist anywhere in the path (folders included); not somebody else's remix."""
     artists, core, brackets = split_row(row)
+    if not core and not brackets:                      # nothing to match on: never match on the artist alone
+        return False
     path = path.replace("\\", "/")
     name = path.split("/")[-1]
     in_name = set(norm(name).split())
@@ -694,6 +714,8 @@ def ranked_candidates(st, row, ts, target, now):
             continue
         t = ts["tried"].get(key)
         if t and (t.get("permanent") or now < t.get("retry_after", 0)):
+            continue
+        if not matches(row, c["fn"]):                      # stored before a matching rule got stricter
             continue
         rank = format_rank(c)
         f = fit(c, target) if (target and rank is not None) else None

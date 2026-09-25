@@ -1,0 +1,21 @@
+# personal data never belongs in this repository
+config.json
+*.state.json
+state/
+.dj-archivist/
+tracklist.csv
+tracks.txt
+
+# audio and renders
+*.mp3
+*.flac
+*.wav
+*.aif
+*.aiff
+*.m4a
+*.mov
+
+# python and os noise
+__pycache__/
+*.pyc
+.DS_Store

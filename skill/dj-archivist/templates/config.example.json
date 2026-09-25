@@ -1,0 +1,58 @@
+{
+  "_comment": [
+    "dj-archivist config. Copy to ~/.dj-archivist/config.json or pass --config PATH.",
+    "Paths may use ~; relative paths resolve against this file's folder. Keys starting with _ are ignored."
+  ],
+
+  "archive_dir": "~/Music/dj-archivist/archive",
+  "work_dir": "~/Music/dj-archivist/work",
+  "state_dir": "~/.dj-archivist",
+  "tracklist_csv": "~/.dj-archivist/tracklist.csv",
+  "inbox_file": "~/.dj-archivist/inbox.txt",
+  "local_import_dir": "~/Downloads",
+
+  "_playlists": [
+    "playlist_tree drives rekordbox.xml: a playlist is [\"Name\", null], a folder is [\"Name\", [children]].",
+    "Each playlist is an archive folder: its tree path, unless playlist_folders maps it elsewhere.",
+    "A track is filed once, in the folder of its first non-set playlist; set_playlists lists the sets."
+  ],
+  "playlist_tree": [
+    ["Genres", [["House", null], ["Tech House", null], ["UK Garage", null]]],
+    ["Sets", [["Warm-up", null]]]
+  ],
+  "playlist_folders": {
+    "House": "House",
+    "Tech House": "Tech House",
+    "UK Garage": "UK Garage",
+    "Warm-up": "Sets/Warm-up"
+  },
+  "set_playlists": ["Warm-up"],
+
+  "slskd": {
+    "url": "http://localhost:5030",
+    "api_key": "",
+    "yml_path": "~/.dj-archivist/slskd.yml",
+    "binary": "~/Applications/slskd/slskd"
+  },
+  "ffmpeg_dir": "",
+
+  "pacing": {
+    "search_interval": 60,
+    "loop": 15,
+    "max_active": 2,
+    "max_open_requests": 6,
+    "enqueue_interval": 30,
+    "remote_queue_timeout": 7200,
+    "start_timeout": 900,
+    "stall_timeout": 1200,
+    "retry_backoff": [0, 7200, 28800, 86400, 259200, 604800],
+    "decision_after_rounds": 3,
+    "next_variant_delay": 300,
+    "keyword_queries_per_round": 8,
+    "reachable_queue": 50
+  },
+
+  "format_priority": ["mp3_320", "aiff", "flac", "wav", "m4a_256"],
+  "spam_tag_patterns": ["https?://", "www\\.", "\\.(com|net|org|ru|to|club)\\b"],
+  "inbox_marker": " - DOWNLOADED"
+}

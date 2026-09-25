@@ -415,11 +415,15 @@ def slskd_ready():
         return False
 
 
-def search(query, wait=25):
+def search(query, wait=25, narrow=False):
     """Start a search, fetch the responses when it completes, then delete it from slskd. A "Completed" search can
     report responses before they are persisted: wait until the count matches, and do not delete early (an early
-    delete returned an empty result in live use)."""
-    sid = api("POST", "/api/v0/searches", {"searchText": query, "fileLimit": 500, "responseLimit": 100})["id"]
+    delete returned an empty result in live use).
+    narrow=True: a broad query with no artist word ("love songs"); response and file limits are halved. In live use
+    the thousands of files returned by such a query were followed by slskd failing to start threads and crashing."""
+    file_limit, response_limit = (250, 50) if narrow else (500, 100)
+    sid = api("POST", "/api/v0/searches", {"searchText": query, "fileLimit": file_limit,
+                                           "responseLimit": response_limit})["id"]
     for _ in range(wait):
         time.sleep(1)
         if "Completed" in str(api("GET", f"/api/v0/searches/{sid}").get("state", "")):
@@ -1109,8 +1113,9 @@ def do_search(tid):
         query = variants[i]
         st["last_search"] = time.time()
         save_state(st)
+    artist_words = {w for group in split_row(row)[0] for w in group}
     try:
-        res, err = search(query), None
+        res, err = search(query, narrow=not (artist_words & set(query.split()))), None
     except Exception as e:
         res, err = [], str(e)
     with lock():
@@ -1190,7 +1195,7 @@ def run_loop(limit=None):
     if limit:
         open_ids = [r["id"] for r in rows if r["status"] in ("", "waiting", "candidate", "downloading")]
         allowed = set(sorted(open_ids, key=id_sort_key)[:limit])
-        log(f"round started: {len(allowed)} tracks ({', '.join(sorted(allowed, key=id_sort_key))})")
+        log(f"round started: {len(allowed)} track{'s' * (len(allowed) != 1)} ({', '.join(sorted(allowed, key=id_sort_key))})")
     else:
         log("loop started")
     down = 0
@@ -1649,7 +1654,7 @@ def write_index(rows=None):
         o[0] += 1
         o[1] += int(parse_length(k["length"]) or 0)
     pending = sum(1 for r in rows if r["status"] not in ("done", "owned", "duplicate"))
-    lines = ["# DJ archive", "", f"Updated {datetime.now():%Y-%m-%d %H:%M} · {len(items)} tracks · "
+    lines = ["# DJ archive", "", f"Updated {datetime.now():%Y-%m-%d %H:%M} · {len(items)} track{'s' * (len(items) != 1)} · "
              f"{pending} more on the way (the loop collects them in the background).", "",
              "| Folder | Tracks | Total length |", "|---|---|---|"]
     for folder, (n, secs) in sorted(per_folder.items()):
@@ -1716,7 +1721,8 @@ def export_rekordbox():
     out = C.archive / "rekordbox.xml"
     ET.ElementTree(root_el).write(out, encoding="UTF-8", xml_declaration=True)
     write_index(rows)
-    print(f"{out}: {len(tracks)} tracks, {len(C.folders)} playlists · archive-index.csv and README.md updated")
+    print(f"{out}: {len(tracks)} track{'s' * (len(tracks) != 1)}, {len(C.folders)} playlists · "
+          "archive-index.csv and README.md updated")
 
 
 # ---------------------------------------------------------------- CLI

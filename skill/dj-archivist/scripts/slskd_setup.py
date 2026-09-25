@@ -34,6 +34,16 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import archivist  # noqa: E402  (shares the config loading with the loop)
 
 
+def raise_open_files_limit(target=10240):
+    """slskd opens hundreds of files and peer connections; a GUI-launched process on macOS may start with a soft
+    limit of 256 open files, which ends in "Too many open files" and crashes. Raise the soft limit for slskd."""
+    import resource
+    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    want = target if hard == resource.RLIM_INFINITY else min(target, hard)
+    if soft != resource.RLIM_INFINITY and soft < want:
+        resource.setrlimit(resource.RLIMIT_NOFILE, (want, hard))
+
+
 def q(s):
     """YAML single-quoted scalar."""
     return "'" + str(s).replace("'", "''") + "'"
@@ -113,7 +123,8 @@ def start(cfg):
         cfg.state_dir.mkdir(parents=True, exist_ok=True)
         with open(cfg.slskd_log, "a") as log:
             subprocess.Popen([str(cfg.slskd_binary), "--config", str(cfg.yml)], stdin=subprocess.DEVNULL,
-                             stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+                             stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
+                             preexec_fn=raise_open_files_limit)
         print("slskd started, waiting for the Soulseek login...")
     s = {}
     for _ in range(40):

@@ -229,7 +229,10 @@ QUOTA_SKIP = 24 * 3600             # "Too many megabytes/files": skip that user 
 REJECT_LIMIT, REJECT_WINDOW = 3, 7 * 24 * 3600   # users with 3 rejections, the last within 7 days, are skipped
 HUGE_QUEUE_GIVE_UP = 600           # remote queue place > 2 x reachable_queue: give up after 10 min
 MISSING_GRACE = 120                # transfer missing from the slskd list for this long: failed
-CANARY_QUERY = "house music"       # a term everybody shares
+# Well-known tracks that are widely shared but still specific. A generic term such as "house music" draws replies
+# from thousands of peers at once, and in live use slskd then failed to start threads and crashed.
+CANARY_QUERIES = ("daft punk one more time", "fatboy slim praise you", "stardust music sounds better",
+                  "modjo lady hear me tonight")
 EMPTY_STREAK = 3                   # empty results in a row before a canary search
 CANARY_MIN_GAP = 600
 CANARY_PAUSE = 15 * 60             # canary empty too: Soulseek is throttling, pause searches
@@ -415,13 +418,14 @@ def slskd_ready():
         return False
 
 
-def search(query, wait=25, narrow=False):
+def search(query, wait=25, narrow=False, small=False):
     """Start a search, fetch the responses when it completes, then delete it from slskd. A "Completed" search can
     report responses before they are persisted: wait until the count matches, and do not delete early (an early
     delete returned an empty result in live use).
     narrow=True: a broad query with no artist word ("love songs"); response and file limits are halved. In live use
-    the thousands of files returned by such a query were followed by slskd failing to start threads and crashing."""
-    file_limit, response_limit = (250, 50) if narrow else (500, 100)
+    the thousands of files returned by such a query were followed by slskd failing to start threads and crashing.
+    small=True: a single-word query or the canary, which any number of peers can answer; 100 files / 20 users."""
+    file_limit, response_limit = (100, 20) if small else (250, 50) if narrow else (500, 100)
     sid = api("POST", "/api/v0/searches", {"searchText": query, "fileLimit": file_limit,
                                            "responseLimit": response_limit})["id"]
     for _ in range(wait):
@@ -1109,10 +1113,11 @@ def next_search_row(st, rows, now, allowed=None):
 
 
 def canary(st):
-    """Are the empty results real, or is the server throttling? Search a term everybody shares."""
+    """Are the empty results real, or is the server throttling? Search a widely shared track, with small limits."""
     st["last_canary"] = time.time()
+    st["canary_i"] = st.get("canary_i", 0) + 1
     try:
-        n = len(search(CANARY_QUERY))
+        n = len(search(CANARY_QUERIES[st["canary_i"] % len(CANARY_QUERIES)], small=True))
     except Exception:
         n = 0
     st["empty_streak"] = 0
@@ -1145,7 +1150,7 @@ def do_search(tid):
         save_state(st)
     artist_words = {w for group in split_row(row)[0] for w in group}
     try:
-        res, err = search(query, narrow=not (artist_words & set(query.split()))), None
+        res, err = search(query, narrow=not (artist_words & set(query.split())), small=len(query.split()) == 1), None
     except Exception as e:
         res, err = [], str(e)
     with lock():

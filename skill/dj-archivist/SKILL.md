@@ -6,8 +6,8 @@ description: >-
   version of every track by its length, enforces a format policy, finds and downloads
   files through sources the DJ is entitled to use (including an optional, rate-limited
   Soulseek backend via slskd), verifies and tags them, files them into playlist folders and
-  exports a Rekordbox XML. Also plans DJ sets (harmonic/Camelot sequencing, BPM plateaus
-  and arcs, mixing sheets), coaches mixing technique, explains electronic music genres and
+  exports a Rekordbox XML or adds tracks straight into the DJ's Rekordbox playlists. Also
+  plans DJ sets (harmonic/Camelot sequencing, BPM plateaus and arcs, mixing sheets), coaches mixing technique, explains electronic music genres and
   DJ music theory, and renders finished mixes to video with lossless audio. Use whenever
   the user mentions a DJ archive, crates, tracklists, extended vs radio versions,
   Soulseek or slskd, Rekordbox, DJ sets, transitions, Camelot keys, BPM, EDM genres,
@@ -76,6 +76,14 @@ Pipeline (scripts in `scripts/`, config from `templates/config.example.json`):
 - `archivist.py decisions`, `decide ID VALUE`: parked version decisions.
 - `archivist.py import-local`, `retag`, `rekordbox`: bring in files the DJ already has,
   repair tags, export the XML plus the archive index and README.
+- `archivist.py rekordbox-sync [--dry-run]`: optional direct mode for DJs who keep their
+  own playlists in Rekordbox. Landed tracks are added to the Rekordbox library and to the
+  playlist that matches their archive folder (config `rekordbox_library`; needs
+  `pyrekordbox` and `sqlcipher3-wheels`, which the user installs). It never writes while
+  Rekordbox is running, backs up master.db first, only adds (never removes or reorders),
+  and re-links moved files instead of duplicating them. The loop retries on its own every
+  5 minutes, so tell the DJ new tracks appear after Rekordbox is closed and still need
+  analysing there.
 - `slskd_setup.py`: optional Soulseek backend setup. The user types their own credentials;
   never ask for or enter passwords yourself.
 

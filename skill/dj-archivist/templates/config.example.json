@@ -54,5 +54,17 @@
 
   "format_priority": ["mp3_320", "aiff", "flac", "wav", "m4a_256"],
   "spam_tag_patterns": ["https?://", "www\\.", "\\.(com|net|org|ru|to|club)\\b"],
-  "inbox_marker": " - DOWNLOADED"
+  "inbox_marker": " - DOWNLOADED",
+
+  "_rekordbox_library": [
+    "Optional: add landed tracks straight into the Rekordbox library and your own playlists (no XML import).",
+    "Needs: pip install pyrekordbox sqlcipher3-wheels. Writes only while Rekordbox is closed; backs up master.db first.",
+    "parent_folder: the Rekordbox folder holding the playlists. playlists: archive playlist -> Rekordbox playlist,",
+    "only where the names differ. Try `archivist.py rekordbox-sync --dry-run` first."
+  ],
+  "rekordbox_library": {
+    "enabled": false,
+    "parent_folder": "",
+    "playlists": {}
+  }
 }

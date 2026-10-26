@@ -25,6 +25,8 @@ Commands (slskd must be running: python3 slskd_setup.py --start):
   search "query" [--artist --title --length]   one paced search that prints length clusters
   import-local [--dry-run] [--id ...]   file owned tracks from the local import dir and orphans from incoming/
   rekordbox                    write rekordbox.xml, archive-index.csv and README.md into the archive
+  rekordbox-sync [--dry-run]   add archived tracks straight into the Rekordbox library and your playlists
+                               (optional, config rekordbox_library; the loop does it when enabled)
   retag                        retag archive files whose artist/title differ from the tracklist or carry spam
 Status values: pending (empty), waiting, candidate, downloading, done, owned, duplicate, decision, not_found.
 Config: --config PATH, else $DJ_ARCHIVIST_CONFIG, else ~/.dj-archivist/config.json (defaults if missing).
@@ -48,6 +50,9 @@ import traceback
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import rekordbox_library  # noqa: E402
 from datetime import datetime
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -87,6 +92,9 @@ DEFAULTS = {
     "format_priority": list(FORMAT_KEYS),
     "spam_tag_patterns": [r"https?://", r"www\.", r"\.(com|net|org|ru|to|club)\b"],
     "inbox_marker": " - DOWNLOADED",
+    # Optional: add landed tracks straight into the Rekordbox library and your own playlists (no XML import).
+    # Needs `pip install pyrekordbox sqlcipher3-wheels`. Writes only while Rekordbox is closed, backs up first.
+    "rekordbox_library": {"enabled": False, "parent_folder": "", "playlists": {}},
 }
 
 
@@ -185,6 +193,13 @@ class Config:
         pats = [p for p in d["spam_tag_patterns"] or [] if p]
         self.spam_re = re.compile("|".join(f"(?:{p})" for p in pats) if pats else r"(?!)", re.I)
         self.marker = d["inbox_marker"] if (d["inbox_marker"] or "").strip() else DEFAULTS["inbox_marker"]
+        rl = _merge(DEFAULTS["rekordbox_library"], d.get("rekordbox_library") or {})
+        self.rb_library = bool(rl["enabled"])
+        self.rb_parent = rl["parent_folder"] or ""
+        # archive folder -> Rekordbox playlist: the playlist of the same name, unless "playlists" renames it
+        self.rb_playlists = {folder: (rl["playlists"] or {}).get(name, name)
+                             for name, folder in self.folders.items() if name not in self.sets}
+        self.rb_backups = self.state_dir / "rekordbox-backups"
         self.marker_re = re.compile(r"\s*" + r"\s*".join(re.escape(t) for t in self.marker.split()) + r"\s*$", re.I)
 
 
@@ -1280,6 +1295,19 @@ def run_loop(limit=None):
                     st["index_count"] = count
                     with contextlib.redirect_stdout(io.StringIO()):
                         export_rekordbox()
+                    st["rb_pending"] = C.rb_library
+                    save_state(st)
+                if st.get("rb_pending") and now - st.get("rb_try", 0) > 300:
+                    st["rb_try"] = now                # Rekordbox open: try again in 5 minutes
+                    try:
+                        summary = library_sync()
+                    except Exception as e:
+                        summary = f"rekordbox library sync failed: {e}"
+                        log(summary)
+                    if summary and "failed" not in summary:
+                        st["rb_pending"] = False
+                        if not summary.startswith("rekordbox: 0 new tracks, 0 re-linked, 0 playlist"):
+                            log(summary)
                     save_state(st)
                 finished = allowed is not None and all(
                     r["status"] in FINISHED or (r["status"] == "waiting" and track_state(st, r["id"])["round"] >= 1)
@@ -1776,6 +1804,22 @@ def export_rekordbox():
           "archive-index.csv and README.md updated")
 
 
+def library_sync(dry_run=False):
+    """Add archived tracks straight into the Rekordbox library and playlists (config: rekordbox_library). Returns
+    the summary, or None while Rekordbox is running."""
+    rows = read_rows()
+    info = {str(C.archive / r["file"]): {"artist": r["artist"], "title": r["title"], "bpm": r["bpm"],
+                                         "length": r["length"]}
+            for r in rows if r["file"] and r["status"] in ("done", "owned")}
+    return rekordbox_library.sync(C.archive, C.rb_playlists, C.rb_parent, info, C.rb_backups, dry_run)
+
+
+def cmd_rekordbox_sync(dry_run=False):
+    summary = library_sync(dry_run)
+    print(summary if summary is not None else "Rekordbox is running: close it and run this again "
+          "(the loop retries on its own every 5 minutes)")
+
+
 # ---------------------------------------------------------------- CLI
 def _raise_interrupt(*_):
     raise KeyboardInterrupt()
@@ -1816,6 +1860,9 @@ def build_parser():
     p.add_argument("--dry-run", action="store_true", help="only show what would be filed")
     p.add_argument("--id", nargs="*", help="only these track ids")
     sp.add_parser("rekordbox", help="write rekordbox.xml, archive-index.csv and README.md into the archive")
+    p = sp.add_parser("rekordbox-sync", help="add archived tracks straight into the Rekordbox library and "
+                      "playlists (Rekordbox must be closed; config: rekordbox_library)")
+    p.add_argument("--dry-run", action="store_true", help="only show what would be added")
     sp.add_parser("retag", help="retag archive files whose artist/title differ from the tracklist or carry spam")
     return ap
 
@@ -1838,6 +1885,7 @@ def main(argv=None):
         "search": lambda: cmd_search(a.query, a.artist, a.title, a.length),
         "import-local": lambda: cmd_import_local(a.dry_run, set(a.id or [])),
         "rekordbox": export_rekordbox,
+        "rekordbox-sync": lambda: cmd_rekordbox_sync(a.dry_run),
         "retag": cmd_retag,
     }
     try:

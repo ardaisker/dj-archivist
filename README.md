@@ -107,6 +107,10 @@ id,artist,title,length,bpm,key,playlists
 - **Tags:** clean artist/title; shop-spam tags removed.
 - **Kept current automatically:** a `rekordbox.xml` with every playlist membership, an
   `archive-index.csv` and a README.
+- **Or straight into Rekordbox (optional):** once the DJ built their own playlists in
+  Rekordbox, every new download is added to the library and to the playlist that matches
+  its folder, with no XML import. It only writes while Rekordbox is closed and backs the
+  library up first.
 
 In the first afternoon, about 100 tracks came back, each matching the old library's length.
 
@@ -158,11 +162,18 @@ The assistant prepares and runs everything it safely can. These steps are yours:
    versions) and answer the assistant when an inbox line is ambiguous.
 7. **Buy what cannot be found.** Tracks that exhaust every retry end up on a `not_found`
    list with store links.
-8. **Import into Rekordbox** when a batch lands:
-   1. Preferences > View > Layout: enable "rekordbox xml".
-   2. Preferences > Advanced > Database > rekordbox xml > Imported Library: choose the
-      archive's `rekordbox.xml`.
-   3. Right-click the folders under rekordbox xml > Import Playlist.
+8. **Get the tracks into Rekordbox**, one of two ways:
+   - **XML import** when a batch lands:
+     1. Preferences > View > Layout: enable "rekordbox xml".
+     2. Preferences > Advanced > Database > rekordbox xml > Imported Library: choose the
+        archive's `rekordbox.xml`.
+     3. Right-click the folders under rekordbox xml > Import Playlist.
+   - **Direct (no import step):** install `pip install pyrekordbox sqlcipher3-wheels`, create
+     your playlists in Rekordbox, and set `rekordbox_library` in the config (`enabled`, the
+     Rekordbox folder that holds the playlists, and any playlist whose name differs from its
+     archive folder). New tracks then appear in those playlists whenever Rekordbox is closed.
+     Analyse them in Rekordbox afterwards (beat grid, key). Check first with
+     `archivist.py rekordbox-sync --dry-run`.
 
 ## Troubleshooting
 
@@ -197,6 +208,7 @@ skill/dj-archivist/
     music-theory-for-djs.md      phrasing, keys, EQ, loudness, file quality
   scripts/
     archivist.py                 the archive loop and CLI
+    rekordbox_library.py         optional: add tracks straight into the Rekordbox library
     slskd_setup.py               optional slskd (Soulseek) setup helper
     render_set.py                lossless set-to-video renderer
   templates/                     example config, tracklist and inbox
@@ -207,7 +219,8 @@ tests/                           offline tests for the archive logic
 
 - An assistant that supports Agent Skills (Claude Code, or the Claude apps with skills
   enabled).
-- Python 3.9 or newer (standard library only).
+- Python 3.9 or newer (standard library only; the optional direct Rekordbox sync needs
+  `pyrekordbox` and `sqlcipher3-wheels`).
 - `ffmpeg` and `ffprobe`.
 - Optional: [slskd](https://github.com/slskd/slskd) and a Soulseek account, if you choose to
   use that backend.
@@ -250,7 +263,8 @@ Settings > Capabilities > Skills.
 6. Ask the assistant for a daily routine: it keeps the loop alive, resolves your inbox,
    decides parked versions and reports what landed.
 7. Import `rekordbox.xml` from your archive folder into Rekordbox (steps in the generated
-   README inside the archive).
+   README inside the archive), or turn on the direct library sync (`rekordbox_library` in
+   the config) so new tracks land in your Rekordbox playlists by themselves.
 
 Run the tests with `python3 tests/test_core.py`.
 

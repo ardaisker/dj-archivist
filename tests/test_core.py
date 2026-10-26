@@ -497,6 +497,24 @@ def test_rekordbox_export():
 
 # ---------------------------------------------------------------- runner
 
+def test_rekordbox_library_plan():
+    """Direct library sync, planning step: add new files, re-link a moved file instead of duplicating it, add
+    missing playlist memberships, never touch what is already in place."""
+    import rekordbox_library as R
+    files = {"/a/House/x.mp3": "House", "/a/Tech/y.mp3": "Tech", "/a/Tech/moved.mp3": "Tech"}
+    library = {"/a/House/x.mp3", "/a/House/moved.mp3"}               # moved.mp3 used to live in House
+    members = {"House": {"/a/House/x.mp3", "/a/House/moved.mp3"}, "Tech house": set()}
+    add, relink, link = R.plan(files, library, members, {"House": "House", "Tech": "Tech house"})
+    assert add == ["/a/Tech/y.mp3"]
+    assert relink == [("/a/House/moved.mp3", "/a/Tech/moved.mp3")]
+    assert sorted(link) == [("/a/Tech/moved.mp3", "Tech house"), ("/a/Tech/y.mp3", "Tech house")]
+    cfg = A.Config({"rekordbox_library": {"enabled": True, "parent_folder": "2026",
+                                          "playlists": {"Tech House": "Tech house"}}})
+    assert cfg.rb_library and cfg.rb_parent == "2026"
+    assert cfg.rb_playlists["Tech House"] == "Tech house" and cfg.rb_playlists["House"] == "House"
+    assert "Sets/Warm-up" not in cfg.rb_playlists                    # sets are not filed by folder
+
+
 def test_title_parsing_regressions():
     """Live bugs: a version suffix after " - " was read as "Original Artist - Song", titles made only of noise
     words or numbers came out empty, and an empty core matched any track by the artist."""
